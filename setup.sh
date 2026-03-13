@@ -168,7 +168,7 @@ if command -v node &>/dev/null; then
 else
     if [ "$PLATFORM" = "Linux" ]; then
         action "Installing Node.js..."
-        curl -fsSL https://deb.nodesource.com/setup_20.x 2>/dev/null | bash - 2>/dev/null
+        curl -fsSL https://deb.nodesource.com/setup_22.x 2>/dev/null | bash - 2>/dev/null
         apt-get install -y nodejs 2>/dev/null
         command -v node &>/dev/null && ok "Node.js $(node -v) installed" || fail "Node.js install failed"
     else
