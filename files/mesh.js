@@ -29,8 +29,7 @@ const path = require('path');
 const os = require('os');
 
 // ─── Config ──────────────────────────────────────────
-const { resolveNatsUrl } = require('./lib/nats-resolve');
-const NATS_URL = resolveNatsUrl();
+const { NATS_URL, natsConnectOpts } = require('./lib/nats-resolve');
 const SHARED_DIR = path.join(os.homedir(), 'openclaw', 'shared');
 const LOCAL_NODE = os.hostname().toLowerCase().replace(/[^a-z0-9-]/g, '-');
 const sc = StringCodec();
@@ -64,16 +63,21 @@ async function remoteNode(nc) {
   const sub = nc.subscribe('openclaw.*.heartbeat');
   const deadline = Date.now() + 3000;
 
+  // Force-unsubscribe after deadline to prevent hanging if no messages arrive
+  const timer = setTimeout(() => sub.unsubscribe(), 3000);
+
   for await (const msg of sub) {
     try {
       const hb = JSON.parse(sc.decode(msg.data));
       if (hb.node && hb.node !== LOCAL_NODE) {
+        clearTimeout(timer);
         sub.unsubscribe();
         return hb.node;
       }
     } catch {}
     if (Date.now() >= deadline) break;
   }
+  clearTimeout(timer);
   sub.unsubscribe();
 
   // Fallback: try aliases, then self
@@ -114,7 +118,7 @@ function checkExecSafety(command) {
  */
 async function natsConnect() {
   try {
-    return await connect({ servers: NATS_URL, timeout: 5000 });
+    return await connect(natsConnectOpts({ timeout: 5000 }));
   } catch (err) {
     console.error(`Error: Cannot connect to NATS at ${NATS_URL}`);
     console.error(`Is the NATS server running? Is Tailscale connected?`);
@@ -156,15 +160,21 @@ async function collectHeartbeats(nc, waitMs = 3000) {
     uptime: os.uptime(),
   };
 
+  // Force-unsubscribe after deadline to prevent hanging if no messages arrive
+  const timer = setTimeout(() => sub.unsubscribe(), waitMs);
+
   // Listen for heartbeats for a few seconds
   const deadline = Date.now() + waitMs;
   for await (const msg of sub) {
-    const s = JSON.parse(sc.decode(msg.data));
-    if (s.node !== LOCAL_NODE) {
-      nodes[s.node] = s;
-    }
+    try {
+      const s = JSON.parse(sc.decode(msg.data));
+      if (s.node !== LOCAL_NODE) {
+        nodes[s.node] = s;
+      }
+    } catch {}
     if (Date.now() >= deadline) break;
   }
+  clearTimeout(timer);
   sub.unsubscribe();
   return nodes;
 }

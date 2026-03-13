@@ -26,7 +26,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { NATS_URL } = require('./lib/nats-resolve');
+const { NATS_URL, natsConnectOpts } = require('./lib/nats-resolve');
 
 // ─────────────────────────────────────────────
 // CONFIG
@@ -73,7 +73,7 @@ const SYNC_COOLDOWN = 4000;
 // ─────────────────────────────────────────────
 // AUDIT LOG
 // ─────────────────────────────────────────────
-const AUDIT_LOG = path.join(SHARED_DIR, 'mesh-audit.log');
+const AUDIT_LOG = path.join(os.homedir(), 'openclaw', 'mesh-audit.log');
 
 function auditLog(action, detail) {
   const entry = `[${new Date().toISOString()}] [${NODE_ID}] ${action}: ${detail}\n`;
@@ -95,6 +95,13 @@ function screenshot(label = 'capture', region = null) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `${NODE_ID}-${label}-${timestamp}.png`;
   const filepath = path.join(CAPTURE_DIR, filename);
+
+  // Validate region to prevent command injection (must be x,y,w,h digits only)
+  if (region && !/^\d+,\d+,\d+,\d+$/.test(region)) {
+    console.error(`[${NODE_ID}] BLOCKED invalid region format: ${region}`);
+    auditLog('BLOCKED_CAPTURE', `invalid region: ${region}`);
+    return null;
+  }
 
   try {
     if (PLATFORM === 'darwin') {
@@ -396,7 +403,7 @@ async function main() {
   let nc;
   while (true) {
     try {
-      nc = await connect({ servers: NATS_URL, timeout: 5000 });
+      nc = await connect(natsConnectOpts({ timeout: 5000 }));
       break;
     } catch (err) {
       console.log(`[${NODE_ID}] NATS connect failed, retrying in 5s...`);
@@ -419,17 +426,50 @@ async function main() {
     })));
   }, 10000);
 
-  // ── EXEC SAFETY — server-side blocklist ──────
+  // ── EXEC SAFETY — allow-list + blocklist ──────
+  // Allow-list: only these command prefixes are permitted for remote exec.
+  // Everything else is denied by default. This is far safer than a blocklist.
+  const EXEC_ALLOWLIST = [
+    /^(sudo\s+)?(systemctl|launchctl)\s+(restart|start|stop|status|is-active)\s/,
+    /^(sudo\s+)?killall\s/,
+    /^(mesh|mesh-health|mesh-repair)\b/,
+    /^(git\s+(status|log|diff|branch|pull|push|checkout|stash|worktree)\b)/,
+    /^(node|npm|npx)\s/,
+    /^(ls|cat|head|tail|wc|df|du|free|uptime|uname|hostname|whoami|id|date|ps|pgrep)\b/,
+    /^(grep|find|which|file|stat|realpath|readlink|dirname|basename)\b/,
+    /^(curl|wget)\s/,
+    /^(tailscale)\s+(status|ip|ping|netcheck)\b/,
+    /^(nats|nats-server)\s/,
+    /^echo\s/,
+    /^test\s/,
+    /^mkdir\s/,
+    /^cp\s/,
+    /^mv\s/,
+    /^touch\s/,
+    /^rm\s+(?!.*(-rf?\s+\/|--no-preserve-root))/, // rm allowed but not rm -rf /
+  ];
+
   const EXEC_BLOCKLIST = [
     /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?\//, // rm -rf /
     /mkfs/, /dd\s+if=/, /:\(\)\{.*\|.*\}/, // destructive
     />\s*\/dev\/sd/, /shutdown/, /reboot/, /init\s+[06]/,
     /chmod\s+(-R\s+)?777\s+\//, /chown\s+(-R\s+)?.*\s+\//,
+    /\bpython[23]?\s+-c\b/, /\bruby\s+-e\b/, /\bperl\s+-e\b/, // interpreter injection
+    /\bbash\s+-c\b/, /\bsh\s+-c\b/, /\bzsh\s+-c\b/,           // shell injection
+    /\beval\b/, /\bexec\b/,
+    /\/etc\/(shadow|passwd|sudoers)/, // sensitive file access
+    /\bcrontab\b/,
+    /[|`$]/, // pipe, backtick, command substitution — block shell meta
   ];
 
   function isExecSafe(cmd) {
+    const trimmed = cmd.trim();
+    // Must match allow-list
+    const allowed = EXEC_ALLOWLIST.some(p => p.test(trimmed));
+    if (!allowed) return false;
+    // Must not match blocklist
     for (const pattern of EXEC_BLOCKLIST) {
-      if (pattern.test(cmd)) return false;
+      if (pattern.test(trimmed)) return false;
     }
     return true;
   }

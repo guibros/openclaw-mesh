@@ -251,11 +251,21 @@ check_nats_connectivity
 
 # ─── Output ──────────────────────────────────────────
 
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
 if $JSON_MODE; then
     # JSON output for programmatic consumption
     echo "{"
-    echo "  \"node\": \"$NODE_ID\","
-    echo "  \"role\": \"$NODE_ROLE\","
+    echo "  \"node\": \"$(json_escape "$NODE_ID")\","
+    echo "  \"role\": \"$(json_escape "$NODE_ROLE")\","
     echo "  \"platform\": \"$(uname -s)\","
     echo "  \"overall\": \"$OVERALL\","
     echo "  \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
@@ -263,7 +273,7 @@ if $JSON_MODE; then
     for i in "${!CHECK_NAMES[@]}"; do
         comma=","
         [ "$i" -eq $((${#CHECK_NAMES[@]} - 1)) ] && comma=""
-        echo "    {\"name\": \"${CHECK_NAMES[$i]}\", \"status\": \"${CHECK_STATUSES[$i]}\", \"detail\": \"${CHECK_DETAILS[$i]}\"}$comma"
+        echo "    {\"name\": \"$(json_escape "${CHECK_NAMES[$i]}")\", \"status\": \"${CHECK_STATUSES[$i]}\", \"detail\": \"$(json_escape "${CHECK_DETAILS[$i]}")\"}$comma"
     done
     echo "  ]"
     echo "}"

@@ -192,15 +192,20 @@ if [ "$PLATFORM" = "Linux" ]; then
         fi
         # Build NATS auth flag if token is configured
         NATS_AUTH_FLAG=""
+        NATS_LISTEN_ADDR="0.0.0.0"
         if [ -n "$OPENCLAW_NATS_TOKEN" ]; then
             NATS_AUTH_FLAG="--auth $OPENCLAW_NATS_TOKEN"
+        else
+            # No auth token — restrict to localhost to prevent unauthenticated remote access
+            NATS_LISTEN_ADDR="127.0.0.1"
+            warn "No OPENCLAW_NATS_TOKEN set — NATS will only listen on 127.0.0.1. Set OPENCLAW_NATS_TOKEN to listen on all interfaces."
         fi
         cat > /etc/systemd/system/nats.service << NATSEOF
 [Unit]
 Description=NATS Server
 After=network.target tailscaled.service
 [Service]
-ExecStart=/usr/local/bin/nats-server -p 4222 --addr 0.0.0.0 --max_payload 16777216 ${NATS_AUTH_FLAG}
+ExecStart=/usr/local/bin/nats-server -p 4222 --addr ${NATS_LISTEN_ADDR} --max_payload 16777216 ${NATS_AUTH_FLAG}
 Restart=always
 RestartSec=5
 [Install]
