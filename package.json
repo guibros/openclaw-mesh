@@ -1,0 +1,33 @@
+{
+  "name": "openclaw-mesh-nodedeploy",
+  "version": "2.0.0",
+  "description": "One-command mesh network deployer for OpenClaw. Installs agents, shared folders, health monitoring, and self-repair across macOS and Ubuntu nodes over Tailscale + NATS.",
+  "bin": {
+    "openclaw-mesh": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "files/",
+    "files/lib/",
+    "setup.sh",
+    "README.md"
+  ],
+  "keywords": [
+    "openclaw",
+    "mesh",
+    "nats",
+    "tailscale",
+    "devops",
+    "agent",
+    "distributed"
+  ],
+  "author": "guibros",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/guibros/openclaw-mesh.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
