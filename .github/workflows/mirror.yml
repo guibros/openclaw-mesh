@@ -1,0 +1,28 @@
+name: Mirror to guibros
+
+on:
+  push:
+    branches: ['**']   # '**' = all branches, including nested like feature/foo
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Bare clone the source repo
+        # --bare: clones ALL git data (branches, tags, refs) without checking out files
+        # This is required before a --mirror push — you can't mirror from a regular clone
+        run: git clone --bare https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} repo-mirror
+        # GITHUB_TOKEN is auto-injected by GitHub for the current repo — no setup needed
+
+      - name: Push mirror to guibros
+        run: |
+          cd repo-mirror
+
+          # Register the target repo on guibros as a remote called "target"
+          git remote add target https://x-access-token:${{ secrets.GUIBROS_PAT }}@github.com/guibros/openclaw-mesh.git
+          #                                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          #                                                     Replace this with the actual repo name on guibros (must already exist)
+
+          # --mirror: pushes ALL refs (branches, tags) and also propagates deletions
+          git push --mirror target
