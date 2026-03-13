@@ -31,7 +31,7 @@ const { NATS_URL } = require('./lib/nats-resolve');
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
-const NODE_ID = os.hostname().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+const NODE_ID = process.env.OPENCLAW_NODE_ID || os.hostname().toLowerCase().replace(/[^a-z0-9-]/g, '-');
 const SHARED_DIR = path.join(os.homedir(), 'openclaw', 'shared');
 const CAPTURE_DIR = path.join(SHARED_DIR, 'captures');
 const PLATFORM = os.platform();
@@ -43,7 +43,7 @@ try {
   const meshConfig = path.join(os.homedir(), 'openclaw', '.mesh-config');
   if (fs.existsSync(meshConfig)) {
     const content = fs.readFileSync(meshConfig, 'utf8');
-    const match = content.match(/^\s*MESH_ROLE\s*=\s*(.+)/m);
+    const match = content.match(/^\s*OPENCLAW_NODE_ROLE\s*=\s*(.+)/m);
     if (match) NODE_ROLE = match[1].trim();
   }
 } catch { /* best-effort */ }
@@ -419,11 +419,34 @@ async function main() {
     })));
   }, 10000);
 
+  // ── EXEC SAFETY — server-side blocklist ──────
+  const EXEC_BLOCKLIST = [
+    /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?\//, // rm -rf /
+    /mkfs/, /dd\s+if=/, /:\(\)\{.*\|.*\}/, // destructive
+    />\s*\/dev\/sd/, /shutdown/, /reboot/, /init\s+[06]/,
+    /chmod\s+(-R\s+)?777\s+\//, /chown\s+(-R\s+)?.*\s+\//,
+  ];
+
+  function isExecSafe(cmd) {
+    for (const pattern of EXEC_BLOCKLIST) {
+      if (pattern.test(cmd)) return false;
+    }
+    return true;
+  }
+
   // ── EXEC ───────────────────────────────────
   const execSub = nc.subscribe(`openclaw.${NODE_ID}.exec`);
   (async () => {
     for await (const msg of execSub) {
       const cmd = sc.decode(msg.data);
+      if (!isExecSafe(cmd)) {
+        auditLog('EXEC_BLOCKED', cmd);
+        console.log(`[${NODE_ID}] BLOCKED dangerous command: ${cmd}`);
+        if (msg.reply) msg.respond(sc.encode(JSON.stringify({
+          node: NODE_ID, command: cmd, output: 'Command blocked by server-side safety filter', exitCode: 126,
+        })));
+        continue;
+      }
       auditLog('EXEC', cmd);
       console.log(`[${NODE_ID}] Exec: ${cmd}`);
       try {

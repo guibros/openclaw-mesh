@@ -125,7 +125,7 @@ async function natsConnect() {
 /**
  * Send a NATS request and wait for a response (with timeout).
  */
-async function natsRequest(nc, subject, payload, timeoutMs = 35000) {
+async function natsRequest(nc, subject, payload, timeoutMs = 120000) {
   try {
     const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
     const msg = await nc.request(subject, sc.encode(data), { timeout: timeoutMs });
@@ -279,7 +279,12 @@ async function cmdCapture(args) {
  */
 function cmdLs(args) {
   const subdir = args[0] || '';
-  const target = path.join(SHARED_DIR, subdir);
+  const resolved = path.resolve(SHARED_DIR, subdir);
+  if (!resolved.startsWith(SHARED_DIR)) {
+    console.error('Error: path traversal blocked');
+    process.exit(1);
+  }
+  const target = resolved;
 
   if (!fs.existsSync(target)) {
     console.error(`Not found: ${target}`);
@@ -329,7 +334,12 @@ function cmdPut(args) {
     process.exit(1);
   }
 
-  const destDir = path.join(SHARED_DIR, destSubdir);
+  const resolvedDest = path.resolve(SHARED_DIR, destSubdir);
+  if (!resolvedDest.startsWith(SHARED_DIR)) {
+    console.error('Error: path traversal blocked');
+    process.exit(1);
+  }
+  const destDir = resolvedDest;
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
   const filename = path.basename(srcPath);
@@ -409,7 +419,7 @@ async function cmdHealth(args) {
     for (const remote of remoteIds) {
       if (!jsonMode) console.log(`\n── Remote node: ${remote} ──\n`);
       try {
-        const remoteCmd = `bash openclaw/bin/mesh-health.sh ${localArgs}`;
+        const remoteCmd = `bash ~/openclaw/bin/mesh-health.sh ${localArgs}`;
         const result = await natsRequest(nc, `openclaw.${remote}.exec`, remoteCmd, 20000);
         if (result.output) process.stdout.write(result.output);
       } catch (e) {
@@ -463,7 +473,7 @@ async function cmdRepair(args) {
       try {
         const result = await natsRequest(nc,
           `openclaw.${remote}.exec`,
-          `bash openclaw/bin/mesh-repair.sh`,
+          `bash ~/openclaw/bin/mesh-repair.sh`,
           120000
         );
         if (result.output) process.stdout.write(result.output);

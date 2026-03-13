@@ -195,7 +195,7 @@ if [ "$PLATFORM" = "Linux" ]; then
 Description=NATS Server
 After=network.target tailscaled.service
 [Service]
-ExecStart=/usr/local/bin/nats-server -p 4222 --addr 0.0.0.0
+ExecStart=/usr/local/bin/nats-server -p 4222 --addr 0.0.0.0 --max_payload 16777216
 Restart=always
 RestartSec=5
 [Install]
@@ -234,6 +234,12 @@ cp "$FILES_DIR/agent.js" "$OPENCLAW_DIR/agent.js"
 chown "$NODE_USER" "$OPENCLAW_DIR/agent.js"
 chmod +x "$OPENCLAW_DIR/agent.js"
 ok "agent.js -> $OPENCLAW_DIR/agent.js"
+
+action "Deploying shared libraries..."
+mkdir -p "$OPENCLAW_DIR/lib"
+cp "$FILES_DIR/lib/nats-resolve.js" "$OPENCLAW_DIR/lib/nats-resolve.js"
+chown -R "$NODE_USER" "$OPENCLAW_DIR/lib"
+ok "lib/nats-resolve.js -> $OPENCLAW_DIR/lib/"
 
 action "Writing .mesh-config..."
 MESH_CONFIG="$OPENCLAW_DIR/.mesh-config"
@@ -353,8 +359,10 @@ SUDEOF
     else
         cat > "$SUDOERS_FILE" << SUDEOF
 # OpenClaw mesh — allow agent to restart services without password
-$NODE_USER ALL=(ALL) NOPASSWD: /bin/launchctl load *
-$NODE_USER ALL=(ALL) NOPASSWD: /bin/launchctl unload *
+$NODE_USER ALL=(ALL) NOPASSWD: /bin/launchctl load /Library/LaunchDaemons/com.openclaw.agent.plist
+$NODE_USER ALL=(ALL) NOPASSWD: /bin/launchctl unload /Library/LaunchDaemons/com.openclaw.agent.plist
+$NODE_USER ALL=(ALL) NOPASSWD: /bin/launchctl load -w /Library/LaunchAgents/ai.openclaw.*
+$NODE_USER ALL=(ALL) NOPASSWD: /bin/launchctl unload /Library/LaunchAgents/ai.openclaw.*
 $NODE_USER ALL=(ALL) NOPASSWD: /usr/bin/killall -9 node
 SUDEOF
     fi
@@ -372,6 +380,8 @@ header "Phase 4: Mesh CLI + Health + Repair"
 
 action "Deploying mesh CLI..."
 cp "$FILES_DIR/mesh.js" "$BIN_DIR/mesh.js"
+mkdir -p "$BIN_DIR/lib"
+cp "$FILES_DIR/lib/nats-resolve.js" "$BIN_DIR/lib/nats-resolve.js"
 cat > "$BIN_DIR/mesh" << 'MESHWRAP'
 #!/bin/bash
 export NODE_PATH="$HOME/openclaw/node_modules:$NODE_PATH"
