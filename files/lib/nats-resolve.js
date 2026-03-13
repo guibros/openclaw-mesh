@@ -58,7 +58,42 @@ function resolveNatsUrl() {
   return NATS_FALLBACK;
 }
 
+/**
+ * Resolve the NATS auth token using the same chain.
+ * Returns null if no token is configured (backward compatible).
+ */
+function resolveNatsToken() {
+  if (process.env.OPENCLAW_NATS_TOKEN) return process.env.OPENCLAW_NATS_TOKEN;
+
+  try {
+    const envFile = path.join(os.homedir(), '.openclaw', 'openclaw.env');
+    if (fs.existsSync(envFile)) {
+      const content = fs.readFileSync(envFile, 'utf8');
+      const match = content.match(/^\s*OPENCLAW_NATS_TOKEN\s*=\s*(.+)/m);
+      if (match) { const v = match[1].trim().replace(/^["']|["']$/g, ''); if (v) return v; }
+    }
+  } catch {}
+
+  try {
+    const meshConfig = path.join(os.homedir(), 'openclaw', '.mesh-config');
+    if (fs.existsSync(meshConfig)) {
+      const content = fs.readFileSync(meshConfig, 'utf8');
+      const match = content.match(/^\s*OPENCLAW_NATS_TOKEN\s*=\s*(.+)/m);
+      if (match) { const v = match[1].trim().replace(/^["']|["']$/g, ''); if (v) return v; }
+    }
+  } catch {}
+
+  return null;
+}
+
 // Resolve once at require() time — all consumers get the same value
 const NATS_URL = resolveNatsUrl();
+const NATS_TOKEN = resolveNatsToken();
 
-module.exports = { NATS_URL, resolveNatsUrl };
+function natsConnectOpts(extra = {}) {
+  const opts = { servers: NATS_URL, ...extra };
+  if (NATS_TOKEN) opts.token = NATS_TOKEN;
+  return opts;
+}
+
+module.exports = { NATS_URL, NATS_TOKEN, resolveNatsUrl, resolveNatsToken, natsConnectOpts };
