@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-mesh",
+  "name": "openclaw-mesh-harness",
   "version": "2.0.0",
   "description": "One-command mesh network deployer for OpenClaw. Installs agents, shared folders, health monitoring, and self-repair across macOS and Ubuntu nodes over Tailscale + NATS.",
   "bin": {
