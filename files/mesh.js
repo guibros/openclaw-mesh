@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// ⚠️  DO NOT AUTO-MODIFY — managed by openclaw-mesh bootstrap.
+// Known pitfalls: use relative paths (not ~/$HOME), 12s heartbeat window, no JSON.stringify on exec strings.
+
 /**
  * mesh — CLI bridge for OpenClaw ↔ NATS mesh interaction.
  *
@@ -187,7 +190,7 @@ async function collectHeartbeats(nc, waitMs = 3000) {
 async function cmdStatus() {
   const nc = await natsConnect();
   console.log('Scanning mesh...\n');
-  const nodes = await collectHeartbeats(nc, 3000);
+  const nodes = await collectHeartbeats(nc, 12000);
 
   for (const [id, info] of Object.entries(nodes)) {
     const memFree = info.mem?.free || '?';
@@ -419,7 +422,7 @@ async function cmdHealth(args) {
   // If --all, discover remote nodes via heartbeat and check each
   if (allNodes) {
     const nc = await natsConnect();
-    const nodes = await collectHeartbeats(nc, 3000);
+    const nodes = await collectHeartbeats(nc, 12000);
     const remoteIds = Object.keys(nodes).filter(id => id !== LOCAL_NODE);
 
     if (remoteIds.length === 0) {
@@ -429,7 +432,7 @@ async function cmdHealth(args) {
     for (const remote of remoteIds) {
       if (!jsonMode) console.log(`\n── Remote node: ${remote} ──\n`);
       try {
-        const remoteCmd = `bash ~/openclaw/bin/mesh-health.sh ${localArgs}`;
+        const remoteCmd = `bash openclaw/bin/mesh-health.sh ${localArgs}`;
         const result = await natsRequest(nc, `openclaw.${remote}.exec`, remoteCmd, 20000);
         if (result.output) process.stdout.write(result.output);
       } catch (e) {
@@ -471,7 +474,7 @@ async function cmdRepair(args) {
   // If --all, discover remote nodes via heartbeat and repair each
   if (allNodes) {
     const nc = await natsConnect();
-    const nodes = await collectHeartbeats(nc, 3000);
+    const nodes = await collectHeartbeats(nc, 12000);
     const remoteIds = Object.keys(nodes).filter(id => id !== LOCAL_NODE);
 
     if (remoteIds.length === 0) {
@@ -483,7 +486,7 @@ async function cmdRepair(args) {
       try {
         const result = await natsRequest(nc,
           `openclaw.${remote}.exec`,
-          `bash ~/openclaw/bin/mesh-repair.sh`,
+          `bash openclaw/bin/mesh-repair.sh`,
           120000
         );
         if (result.output) process.stdout.write(result.output);
