@@ -440,6 +440,7 @@ async function main() {
     /^(curl|wget)\s/,
     /^(tailscale)\s+(status|ip|ping|netcheck)\b/,
     /^(nats|nats-server)\s/,
+    /^bash\s/,
     /^echo\s/,
     /^test\s/,
     /^mkdir\s/,
