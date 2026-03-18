@@ -152,7 +152,7 @@ async function natsRequest(nc, subject, payload, timeoutMs = 120000) {
 /**
  * Collect recent heartbeats to build node status.
  */
-async function collectHeartbeats(nc, waitMs = 3000) {
+async function collectHeartbeats(nc, waitMs = 12000) {
   const nodes = {};
   const sub = nc.subscribe('openclaw.*.heartbeat');
 
