@@ -27,6 +27,9 @@
     "type": "git",
     "url": "https://github.com/moltyguibros-design/openclaw-mesh.git"
   },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "engines": {
     "node": ">=22"
   }
